@@ -3,17 +3,20 @@ config
 (
 	materialized='table',
 	tags="tables",
-	post_hook=[index(this,'batch_name'),index(this,'row_number')]
+	post_hook=[index(this,'batch_name'),index(this,'timestamp')]
 )
 }}
 
-SELECT sk.batch_name
-, sk.row_number
-, avg(sk2.beer_temp) as avg_beer
-, avg(sk2.room_temp) as avg_room
-FROM {{ref('synth_key')}} sk
-	INNER JOIN {{ref('synth_key')}} sk2 ON
-	sk2.batch_name = sk.batch_name
-	AND sk2.row_number <= sk.row_number
-	AND sk2.timestamp + interval '15 minutes' > sk.timestamp
-GROUP BY sk.batch_name, sk.row_number
+-- the query which averages/smooths the data for each batch
+SELECT
+	  fd.timestamp
+	, fd.batch_name
+	, fd.beer_temp
+	, avg(fd2.beer_temp) as avg_beer
+	, avg(fd2.fridge_temp) as avg_fridge
+	, avg(fd2.room_temp) as avg_room
+FROM brewpi_logs.fermentation_data fd	INNER JOIN brewpi_logs.fermentation_data fd2
+			ON  fd2.batch_name = fd.batch_name 
+			AND fd2.timestamp <= fd.timestamp
+    	AND fd2.timestamp + interval '30 minutes' > fd.timestamp
+GROUP BY fd.timestamp, fd.batch_name, fd.beer_temp
